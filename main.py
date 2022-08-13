@@ -7,10 +7,9 @@ picounicorn.init()
 
 
 class Led:
-    RED = (255, 0, 0)
-    GREEN = (0, 255, 0)
-    BLUE = (0, 0, 255)
-    GREY = (70, 70, 70)
+    RED = (255, 50, 50)
+    GREEN = (50, 255, 50)
+    BLUE = (50, 50, 255)
     COLORS = [RED, GREEN, BLUE]
 
     def __init__(self, x, y, color):
@@ -20,13 +19,13 @@ class Led:
 
 
 class UnicornLeds:
-    def __init__(self, w, h):
-        self.speed = 10  # Lower is slower
+    def __init__(self, w, h, speed=16):
+        self.speed = speed  # Lower is slower
         self.uni_width = w
         self.uni_height = h
         self.leds = []
         self.leds_map = []
-        self.deteriorate_speed = 16  # Lower is slower
+        self.deteriorate_speed = 10  # Lower is slower
         self.led_color_add = True
         for x in range(w):
             row = []
@@ -65,36 +64,32 @@ class UnicornLeds:
 
 
 class Worm:
-    def __init__(self, leds: UnicornLeds, worm_color, body_color):
+    def __init__(self, leds: UnicornLeds):
         self.led_manager = leds
         self.x = random.randint(0, unicorn_leds.uni_width - 2)
         self.x_speed = 1
         self.y = random.randint(0, unicorn_leds.uni_height - 1)
         self.y_speed = 0
-        self.turn_chance = 0.2
-        self.worm_color = worm_color
-        self.body_color = body_color
+        self.turn_chance = 0.25
+        self.worm_color = Led.BLUE
 
     def move(self):
-        # We drop a body in the location we just left
-        self.draw_body()
-
         self.x = self.x + self.x_speed
         self.y = self.y + self.y_speed
 
         # Consider turning - this will not move us, only point the worm in another direction
-        if touching := self.is_touching_edge():
-            self.turn(touching)
-        elif random.random() < self.turn_chance:
+        if self.is_ramming_edge() or self.want_to_turn():
             self.turn()
 
         self.draw_head()
 
-    def draw_body(self):
-        self.led_manager.set_led_color(self.x, self.y, self.body_color)
-
     def draw_head(self):
-        self.led_manager.set_led_color(self.x, self.y, self.worm_color)
+        try:
+            self.led_manager.set_led_color(self.x, self.y, self.worm_color)
+        except IndexError:
+            raise Exception(
+                f"{__class__.__name__} out of bounds with X {self.x}, speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
+            )
 
     def is_touching_edge(self):
         return (
@@ -104,23 +99,68 @@ class Worm:
             or self.y >= self.led_manager.uni_height - 1
         )
 
-    def turn(self, touching_edge=False):
+    def is_ramming_edge(self):
+        return (
+            (self.x <= 0 and self.x_speed < 0)
+            or (self.x >= self.led_manager.uni_width - 1 and self.x_speed > 0)
+            or (self.y <= 0 and self.y_speed < 0)
+            or (self.y >= self.led_manager.uni_height - 1 and self.y_speed > 0)
+        )
+
+    def turn(self):
         if self.x_speed != 0:
             self.x_speed = 0
             if self.y <= 0:
                 self.y_speed = 1
-            elif touching_edge:
+            elif self.y >= self.led_manager.uni_height - 1:
                 self.y_speed = -1
             else:
-                self.y_speed = 1 if random.random() > 0.5 else -1
+                self.y_speed = self.decide_up_or_down()
         elif self.y_speed != 0:
             self.y_speed = 0
             if self.x <= 0:
                 self.x_speed = 1
-            elif touching_edge:
+            elif self.x >= self.led_manager.uni_width - 1:
                 self.x_speed = -1
             else:
-                self.x_speed = 1 if random.random() > 0.5 else -1
+                self.x_speed = self.decide_left_or_right()
+
+    def want_to_turn(self):
+        return random.random() < self.turn_chance
+
+    def decide_up_or_down(self):
+        return 1 if random.random() > 0.5 else -1
+
+    def decide_left_or_right(self):
+        return 1 if random.random() > 0.5 else -1
+
+
+class TurnyWorm(Worm):
+    def __init__(self, leds):
+        super(TurnyWorm, self).__init__(leds)
+        self.turn_chance = 0.6
+        self.worm_color = Led.RED
+
+
+class StraightWorm(Worm):
+    def __init__(self, leds):
+        super(StraightWorm, self).__init__(leds)
+        self.turn_chance = 0.2
+        self.worm_color = Led.BLUE
+
+
+class WallWorm(Worm):
+    def __init__(self, leds):
+        super(WallWorm, self).__init__(leds)
+        self.small_turn_chance = 0.1
+        self.turn_chance = 0.6
+        self.worm_color = Led.GREEN
+
+    def want_to_turn(self):
+        if self.is_touching_edge():
+            return random.random() < self.small_turn_chance
+        else:
+            return random.random() < self.turn_chance
 
 
 class ButtonPresses:
@@ -144,8 +184,8 @@ class ButtonPresses:
     def handle_buttons(self):
         # Button A adds a new worm
         if self.is_pressed(picounicorn.BUTTON_A):
-            new_color = random.choice(Led.COLORS)
-            worms.append(Worm(unicorn_leds, new_color, Led.GREY))
+            worm = random.choice(worm_collection)
+            worms.append(worm(unicorn_leds))
         # Button B deletes the last added worm
         if self.is_pressed(picounicorn.BUTTON_B):
             if len(worms) > 0:
@@ -163,11 +203,9 @@ class ButtonPresses:
 # actually updates the screen.
 unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
 
-worms = [
-    Worm(unicorn_leds, Led.RED, Led.GREY),
-    Worm(unicorn_leds, Led.GREEN, Led.GREY),
-    Worm(unicorn_leds, Led.BLUE, Led.GREY),
-]
+worm_collection = [TurnyWorm, StraightWorm, WallWorm]
+
+worms = [worm(unicorn_leds) for worm in worm_collection]
 buttons = ButtonPresses()
 while True:
     buttons.handle_buttons()
