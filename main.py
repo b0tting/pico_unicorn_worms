@@ -64,6 +64,11 @@ class UnicornLeds:
 
 
 class Worm:
+    EDGE_LEFT = 1
+    EDGE_RIGHT = 2
+    EDGE_TOP = 3
+    EDGE_BOTTOM = 4
+
     def __init__(self, leds: UnicornLeds):
         self.led_manager = leds
         self.x = random.randint(0, unicorn_leds.uni_width - 2)
@@ -88,39 +93,50 @@ class Worm:
             self.led_manager.set_led_color(self.x, self.y, self.worm_color)
         except IndexError:
             raise Exception(
-                f"{__class__.__name__} out of bounds with X {self.x}, speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
+                f"{__class__.__name__} out of bounds with X {self.x},"
+                f" speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
             )
 
-    def is_touching_edge(self):
-        return (
-            self.x == 0
-            or self.x >= self.led_manager.uni_width - 1
-            or self.y == 0
-            or self.y >= self.led_manager.uni_height - 1
-        )
+    def is_touching_edge(self, edge):
+        is_touching = False
+        if edge == self.EDGE_LEFT:
+            is_touching = self.x == 0
+        elif edge == self.EDGE_RIGHT:
+            is_touching = self.x >= self.led_manager.uni_width - 1
+        elif edge == self.EDGE_BOTTOM:
+            is_touching = self.y == 0
+        elif edge == self.EDGE_TOP:
+            is_touching = self.y >= self.led_manager.uni_height - 1
+        return is_touching
+
+    def is_touching_any_edge(self):
+        is_touching = False
+        for is_touching_now in [self.EDGE_LEFT, self.EDGE_TOP, self.EDGE_RIGHT, self.EDGE_BOTTOM]:
+            is_touching = is_touching or self.is_touching_edge(is_touching_now)
+        return is_touching
 
     def is_ramming_edge(self):
         return (
-            (self.x <= 0 and self.x_speed < 0)
-            or (self.x >= self.led_manager.uni_width - 1 and self.x_speed > 0)
-            or (self.y <= 0 and self.y_speed < 0)
-            or (self.y >= self.led_manager.uni_height - 1 and self.y_speed > 0)
+        (self.is_touching_edge(self.EDGE_LEFT) and self.x_speed < 0)
+            or (self.is_touching_edge(self.EDGE_RIGHT) and self.x_speed > 0)
+            or (self.is_touching_edge(self.EDGE_BOTTOM) and self.y_speed < 0)
+            or (self.is_touching_edge(self.EDGE_TOP) and self.y_speed > 0)
         )
 
     def turn(self):
         if self.x_speed != 0:
             self.x_speed = 0
-            if self.y <= 0:
+            if self.is_touching_edge(self.EDGE_BOTTOM):
                 self.y_speed = 1
-            elif self.y >= self.led_manager.uni_height - 1:
+            elif self.is_touching_edge(self.EDGE_TOP):
                 self.y_speed = -1
             else:
                 self.y_speed = self.decide_up_or_down()
         elif self.y_speed != 0:
             self.y_speed = 0
-            if self.x <= 0:
+            if self.is_touching_edge(self.EDGE_LEFT):
                 self.x_speed = 1
-            elif self.x >= self.led_manager.uni_width - 1:
+            elif self.is_touching_edge(self.EDGE_RIGHT):
                 self.x_speed = -1
             else:
                 self.x_speed = self.decide_left_or_right()
@@ -157,7 +173,8 @@ class WallWorm(Worm):
         self.worm_color = Led.GREEN
 
     def want_to_turn(self):
-        if self.is_touching_edge():
+        if self.is_touching_any_edge():
+            print("Small turn chance")
             return random.random() < self.small_turn_chance
         else:
             return random.random() < self.turn_chance
