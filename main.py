@@ -10,7 +10,9 @@ class Led:
     RED = (255, 50, 50)
     GREEN = (50, 255, 50)
     BLUE = (50, 50, 255)
-    COLORS = [RED, GREEN, BLUE]
+    YELLOW = (255, 255, 50)
+    PURPLE = (255, 50, 255)
+    ORANGE = (255, 120, 50)
 
     def __init__(self, x, y, color):
         self.x = x
@@ -88,13 +90,15 @@ class Worm:
 
         self.draw_head()
 
+    def get_worm_color(self):
+        return self.worm_color
+
     def draw_head(self):
         try:
-            self.led_manager.set_led_color(self.x, self.y, self.worm_color)
+            self.led_manager.set_led_color(self.x, self.y, self.get_worm_color())
         except IndexError:
             raise Exception(
-                f"{__class__.__name__} out of bounds with X {self.x},"
-                f" speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
+                f"{__class__.__name__} out of bounds with X {self.x}, speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
             )
 
     def is_touching_edge(self, edge):
@@ -111,13 +115,18 @@ class Worm:
 
     def is_touching_any_edge(self):
         is_touching = False
-        for is_touching_now in [self.EDGE_LEFT, self.EDGE_TOP, self.EDGE_RIGHT, self.EDGE_BOTTOM]:
+        for is_touching_now in [
+            self.EDGE_LEFT,
+            self.EDGE_TOP,
+            self.EDGE_RIGHT,
+            self.EDGE_BOTTOM,
+        ]:
             is_touching = is_touching or self.is_touching_edge(is_touching_now)
         return is_touching
 
     def is_ramming_edge(self):
         return (
-        (self.is_touching_edge(self.EDGE_LEFT) and self.x_speed < 0)
+            (self.is_touching_edge(self.EDGE_LEFT) and self.x_speed < 0)
             or (self.is_touching_edge(self.EDGE_RIGHT) and self.x_speed > 0)
             or (self.is_touching_edge(self.EDGE_BOTTOM) and self.y_speed < 0)
             or (self.is_touching_edge(self.EDGE_TOP) and self.y_speed > 0)
@@ -180,6 +189,38 @@ class WallWorm(Worm):
             return random.random() < self.turn_chance
 
 
+class RainbowWorm(Worm):
+    RAINBOW_COLORS = [Led.RED, Led.ORANGE, Led.YELLOW, Led.GREEN, Led.BLUE, Led.PURPLE]
+
+    def __init__(self, leds):
+        super(RainbowWorm, self).__init__(leds)
+        self.turn_chance = 0.3
+        self.rainbow_index = 0
+
+    def get_worm_color(self):
+        color = self.RAINBOW_COLORS[self.rainbow_index]
+        color = [max(rgb - 50, 0) for rgb in color]
+        self.rainbow_index += 1
+        self.rainbow_index %= len(self.RAINBOW_COLORS)
+        return color
+
+
+class SlowWorm(Worm):
+    def __init__(self, leds):
+        super(SlowWorm, self).__init__(leds)
+        self.turn_chance = 0.6
+        self.worm_color = Led.PURPLE
+        self.move_this_turn = True
+
+    def move(self):
+        if self.move_this_turn:
+            self.move_this_turn = False
+            super(SlowWorm, self).move()
+        else:
+            self.move_this_turn = True
+            self.draw_head()
+
+
 class ButtonPresses:
     def __init__(self):
         self.button_map = {
@@ -220,7 +261,7 @@ class ButtonPresses:
 # actually updates the screen.
 unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
 
-worm_collection = [TurnyWorm, StraightWorm, WallWorm]
+worm_collection = [TurnyWorm, StraightWorm, WallWorm, SlowWorm, RainbowWorm]
 
 worms = [worm(unicorn_leds) for worm in worm_collection]
 buttons = ButtonPresses()
