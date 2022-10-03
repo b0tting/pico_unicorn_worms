@@ -1,4 +1,5 @@
 import random
+import sys
 import time
 
 import picounicorn
@@ -70,6 +71,8 @@ class Worm:
     EDGE_RIGHT = 2
     EDGE_TOP = 3
     EDGE_BOTTOM = 4
+    MAX_AGE = 5000
+    DYING_BOUNDARY = 1000
 
     def __init__(self, leds: UnicornLeds):
         self.led_manager = leds
@@ -79,6 +82,7 @@ class Worm:
         self.y_speed = 0
         self.turn_chance = 0.25
         self.worm_color = Led.BLUE
+        self.age = 0
 
     def move(self):
         self.x = self.x + self.x_speed
@@ -87,11 +91,36 @@ class Worm:
         # Consider turning - this will not move us, only point the worm in another direction
         if self.is_ramming_edge() or self.want_to_turn():
             self.turn()
-
         self.draw_head()
+        if self.age < sys.maxsize - 1:
+            self.age += 1
 
     def get_worm_color(self):
-        return self.worm_color
+        life_left = self.life_left()
+        if life_left < self.DYING_BOUNDARY:
+            return self.age_worm_color(self.worm_color)
+        else:
+            return self.worm_color
+
+    def age_worm_color(self, color):
+        new_color = []
+        average = sum(color) / len(color)
+        invert_life_left = self.DYING_BOUNDARY - self.life_left()
+
+        # Calculate how much to add or substract from each color to
+        # make the worm appear to fade out
+        fraction = round((average * invert_life_left) / self.DYING_BOUNDARY)
+        for i in range(3):
+            current_color = color[i]
+            if current_color > average:
+                # First go to grey. Fade the primary color down
+                current_color = max(current_color - (2*fraction), average)
+            else:
+                # And fade the secondary colors up
+                current_color = min(current_color + fraction, average)
+            # Finally, fade the entire color down
+            new_color.append(round(max(current_color - fraction, 0)))
+        return new_color
 
     def draw_head(self):
         try:
@@ -150,6 +179,12 @@ class Worm:
             else:
                 self.x_speed = self.decide_left_or_right()
 
+    def is_dead(self):
+        return self.life_left() <= 0
+
+    def life_left(self):
+        return self.MAX_AGE - self.age
+
     def want_to_turn(self):
         return random.random() < self.turn_chance
 
@@ -183,7 +218,6 @@ class WallWorm(Worm):
 
     def want_to_turn(self):
         if self.is_touching_any_edge():
-            print("Small turn chance")
             return random.random() < self.small_turn_chance
         else:
             return random.random() < self.turn_chance
@@ -202,6 +236,7 @@ class RainbowWorm(Worm):
         color = [max(rgb - 50, 0) for rgb in color]
         self.rainbow_index += 1
         self.rainbow_index %= len(self.RAINBOW_COLORS)
+        color = self.age_worm_color(color)
         return color
 
 
@@ -256,25 +291,35 @@ class ButtonPresses:
             unicorn_leds.change_speed(-2)
 
 
+def clean_up_dead_worms():
+    for worm in worms:
+        if worm.is_dead():
+            worms.remove(worm)
+            worm = random.choice(worm_collection)
+            worms.append(worm(unicorn_leds))
+
+
 # Unicorn leds managed a matrix of virtual leds and manages the merging
 # of colors. Changes are made there, before calling the update method that
 # actually updates the screen.
 unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
-
 worm_collection = [TurnyWorm, StraightWorm, WallWorm, SlowWorm, RainbowWorm]
 
 worms = [worm(unicorn_leds) for worm in worm_collection]
 buttons = ButtonPresses()
 while True:
     buttons.handle_buttons()
+
+    dead_worms = []
     for worm in worms:
         # This moves the worm and tells unicorn_leds what to light up
         worm.move()
+    clean_up_dead_worms()
 
     # Here we darken all leds a little
     unicorn_leds.deteriorate()
 
-    # And this function finally lights the leds
+    # And this function finally sends the leds to the screen
     unicorn_leds.update_leds()
 
     unicorn_leds.wait_for_loop()
