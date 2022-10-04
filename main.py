@@ -14,6 +14,7 @@ class Led:
     YELLOW = (255, 255, 50)
     PURPLE = (255, 50, 255)
     ORANGE = (255, 120, 50)
+    GREY = (150, 150, 150)
 
     def __init__(self, x, y, color):
         self.x = x
@@ -42,8 +43,8 @@ class UnicornLeds:
     def change_speed(self, adjustment):
         self.speed = max(self.speed - adjustment, 1)
 
-    def set_led_color(self, x, y, color):
-        if self.led_color_add:
+    def set_led_color(self, x, y, color, ignore_add=False):
+        if self.led_color_add and not ignore_add:
             led = self.leds_map[x][y]
             new_color = []
             for i in range(3):
@@ -91,7 +92,7 @@ class Worm:
         # Consider turning - this will not move us, only point the worm in another direction
         if self.is_ramming_edge() or self.want_to_turn():
             self.turn()
-        self.draw_head()
+        self.draw_head(self.get_worm_color())
         if self.age < sys.maxsize - 1:
             self.age += 1
 
@@ -114,7 +115,7 @@ class Worm:
             current_color = color[i]
             if current_color > average:
                 # First go to grey. Fade the primary color down
-                current_color = max(current_color - (2*fraction), average)
+                current_color = max(current_color - (2 * fraction), average)
             else:
                 # And fade the secondary colors up
                 current_color = min(current_color + fraction, average)
@@ -122,9 +123,9 @@ class Worm:
             new_color.append(round(max(current_color - fraction, 0)))
         return new_color
 
-    def draw_head(self):
+    def draw_head(self, color):
         try:
-            self.led_manager.set_led_color(self.x, self.y, self.get_worm_color())
+            self.led_manager.set_led_color(self.x, self.y, color)
         except IndexError:
             raise Exception(
                 f"{__class__.__name__} out of bounds with X {self.x}, speed {self.x_speed}, Y {self.y}, speed {self.y_speed}"
@@ -253,7 +254,26 @@ class SlowWorm(Worm):
             super(SlowWorm, self).move()
         else:
             self.move_this_turn = True
-            self.draw_head()
+            self.draw_head(self.get_worm_color())
+
+
+class RedHeadWorm(Worm):
+    def __init__(self, leds):
+        super(RedHeadWorm, self).__init__(leds)
+        self.worm_body_color = Led.GREY
+        self.worm_color = Led.RED
+        self.last_x = self.x
+        self.last_y = self.y
+
+    def move(self):
+        # This worm jots down it's last position. We have the superclass draw our new led,
+        # then we draw a grey led in our old position
+        self.last_x = self.x
+        self.last_y = self.y
+        super(RedHeadWorm, self).move()
+        self.led_manager.set_led_color(
+            self.last_x, self.last_y, self.worm_body_color, ignore_add=True
+        )
 
 
 class ButtonPresses:
@@ -303,7 +323,14 @@ def clean_up_dead_worms():
 # of colors. Changes are made there, before calling the update method that
 # actually updates the screen.
 unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
-worm_collection = [TurnyWorm, StraightWorm, WallWorm, SlowWorm, RainbowWorm]
+worm_collection = [
+    TurnyWorm,
+    StraightWorm,
+    WallWorm,
+    SlowWorm,
+    RainbowWorm,
+    RedHeadWorm,
+]
 
 worms = [worm(unicorn_leds) for worm in worm_collection]
 buttons = ButtonPresses()
