@@ -3,6 +3,7 @@ import sys
 import time
 
 import picounicorn
+from math import ceil
 
 picounicorn.init()
 
@@ -74,6 +75,7 @@ class Worm:
     EDGE_BOTTOM = 4
     MAX_AGE = 5000
     DYING_BOUNDARY = 1000
+    AGE_SLOWDOWN = 6
 
     def __init__(self, leds: UnicornLeds):
         self.led_manager = leds
@@ -84,10 +86,29 @@ class Worm:
         self.turn_chance = 0.25
         self.worm_color = Led.BLUE
         self.age = 0
+        self.wait_move = 0
+
+    def wait_for_age(self):
+        if self.is_dying():
+            if self.wait_move == 0:
+                inverted_life_left = self.DYING_BOUNDARY - self.life_left()
+                quartile = (
+                    ceil((inverted_life_left * self.AGE_SLOWDOWN) / self.DYING_BOUNDARY)
+                    + 1
+                )
+                self.wait_move = quartile
+
+            if self.wait_move > 0:
+                self.wait_move -= 1
+
+        return self.wait_move > 0
 
     def move(self):
-        self.x = self.x + self.x_speed
-        self.y = self.y + self.y_speed
+        # Dying worms move slower
+
+        if not self.wait_for_age():
+            self.x = self.x + self.x_speed
+            self.y = self.y + self.y_speed
 
         # Consider turning - this will not move us, only point the worm in another direction
         if self.is_ramming_edge() or self.want_to_turn():
@@ -185,6 +206,9 @@ class Worm:
 
     def life_left(self):
         return self.MAX_AGE - self.age
+
+    def is_dying(self):
+        return self.life_left() < self.DYING_BOUNDARY
 
     def want_to_turn(self):
         return random.random() < self.turn_chance
