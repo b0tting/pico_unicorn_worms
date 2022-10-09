@@ -11,6 +11,7 @@ picounicorn.init()
 class Led:
     RED = (255, 50, 50)
     GREEN = (50, 255, 50)
+    WHITE = (250, 250, 250)
     BLUE = (50, 50, 255)
     YELLOW = (255, 255, 50)
     PURPLE = (255, 50, 255)
@@ -24,7 +25,7 @@ class Led:
 
 
 class UnicornLeds:
-    def __init__(self, w, h, speed=16):
+    def __init__(self, w, h, speed=32):
         self.speed = speed  # Lower is slower
         self.uni_width = w
         self.uni_height = h
@@ -76,11 +77,12 @@ class Worm:
     MAX_AGE = 5000
     DYING_BOUNDARY = 1000
     AGE_SLOWDOWN = 6
+    DEFAULT_SPEED = 1
 
     def __init__(self, leds: UnicornLeds):
         self.led_manager = leds
         self.x = random.randint(0, unicorn_leds.uni_width - 2)
-        self.x_speed = 1
+        self.x_speed = self.DEFAULT_SPEED
         self.y = random.randint(0, unicorn_leds.uni_height - 1)
         self.y_speed = 0
         self.turn_chance = 0.25
@@ -187,17 +189,17 @@ class Worm:
         if self.x_speed != 0:
             self.x_speed = 0
             if self.is_touching_edge(self.EDGE_BOTTOM):
-                self.y_speed = 1
+                self.y_speed = self.DEFAULT_SPEED
             elif self.is_touching_edge(self.EDGE_TOP):
-                self.y_speed = -1
+                self.y_speed = -self.DEFAULT_SPEED
             else:
                 self.y_speed = self.decide_up_or_down()
         elif self.y_speed != 0:
             self.y_speed = 0
             if self.is_touching_edge(self.EDGE_LEFT):
-                self.x_speed = 1
+                self.x_speed = self.DEFAULT_SPEED
             elif self.is_touching_edge(self.EDGE_RIGHT):
-                self.x_speed = -1
+                self.x_speed = -self.DEFAULT_SPEED
             else:
                 self.x_speed = self.decide_left_or_right()
 
@@ -283,7 +285,7 @@ class SlowWorm(Worm):
 
 class RedHeadWorm(Worm):
     def __init__(self, leds):
-        super(RedHeadWorm, self).__init__(leds)
+        super().__init__(leds)
         self.worm_body_color = Led.GREY
         self.worm_color = Led.RED
         self.last_x = self.x
@@ -298,6 +300,48 @@ class RedHeadWorm(Worm):
         self.led_manager.set_led_color(
             self.last_x, self.last_y, self.worm_body_color, ignore_add=True
         )
+
+
+class ChasingWorm(Worm):
+    def __init__(self, leds):
+        super().__init__(leds)
+        self.worm_color = Led.GREEN
+        self.worm_second_color = Led.RED
+
+    def move(self):
+        super().move()
+        # This worm tries to find another worm and chase that
+        closest_worm = None
+        for worm in worms:
+            if worm != self:
+                # Find the closest worm
+                if not closest_worm or self.distance_to(worm) < self.distance_to(
+                    closest_worm
+                ):
+                    closest_worm = worm
+
+        # Only chase if further away than 2 spaces
+        if closest_worm:
+            if closest_worm.x > (self.x + 2):
+                self.x_speed = self.DEFAULT_SPEED
+                self.y_speed = 0
+            elif closest_worm.x < (self.x - 2):
+                self.x_speed = -self.DEFAULT_SPEED
+                self.y_speed = 0
+            elif closest_worm.y > (self.y + 2):
+                self.y_speed = self.DEFAULT_SPEED
+                self.x_speed = 0
+            elif closest_worm.y < (self.y - 2):
+                self.y_speed = -self.DEFAULT_SPEED
+                self.x_speed = 0
+
+    def distance_to(self, worm):
+        return abs(self.x - worm.x) + abs(self.y - worm.y)
+
+    def get_worm_color(self):
+        color = self.worm_second_color if self.age % 2 == 0 else self.worm_color
+        color = self.age_worm_color(color)
+        return color
 
 
 class ButtonPresses:
@@ -348,6 +392,7 @@ def clean_up_dead_worms():
 # actually updates the screen.
 unicorn_leds = UnicornLeds(picounicorn.get_width(), picounicorn.get_height())
 worm_collection = [
+    ChasingWorm,
     TurnyWorm,
     StraightWorm,
     WallWorm,
@@ -356,7 +401,8 @@ worm_collection = [
     RedHeadWorm,
 ]
 
-worms = [worm(unicorn_leds) for worm in worm_collection]
+# worms = [worm(unicorn_leds) for worm in worm_collection]
+worms = [ChasingWorm(unicorn_leds), StraightWorm(unicorn_leds)]
 buttons = ButtonPresses()
 while True:
     buttons.handle_buttons()
