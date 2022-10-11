@@ -397,19 +397,20 @@ class LifeAndDeath:
     def handle_life_and_death(self):
         for worm in self.worms:
             worm.move()
-            self.procreate(worm)
             if worm.is_dead():
                 self.worms.remove(worm)
-        if len(self.worms) < self.min_worms_count:
+        self.procreate()
+
+    # Todo: Worms should have control over procreation themselves
+    def procreate(self):
+        # Depending on the number of worms, we might not want to procreate
+        birth = True
+        birth_range = range(0, len(self.worms) - self.min_worms_count + 1)
+        for i in birth_range:
+            birth = birth and random.randint(0, Worm.MAX_AGE) == 1
+
+        if birth:
             self.worms.append(self.get_random_worm())
-
-    # Worms should have control over procreation themselves
-    def procreate(self, worm):
-        if random.randint(0, worm.MAX_AGE) == 1:
-            self.birth_worm()
-
-    def birth_worm(self):
-        self.worms.append(self.get_random_worm())
 
 
 # Unicorn leds managed a matrix of virtual leds and manages the merging
