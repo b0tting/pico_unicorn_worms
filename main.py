@@ -402,7 +402,8 @@ worm_collection = [
 ]
 
 # worms = [worm(unicorn_leds) for worm in worm_collection]
-worms = [ChasingWorm(unicorn_leds), StraightWorm(unicorn_leds)]
+
+worms = [worm(unicorn_leds) for worm in random.sample(worm_collection, 2)]
 buttons = ButtonPresses()
 while True:
     buttons.handle_buttons()
