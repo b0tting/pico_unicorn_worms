@@ -379,12 +379,37 @@ class ButtonPresses:
             unicorn_leds.change_speed(-2)
 
 
-def clean_up_dead_worms():
-    for worm in worms:
-        if worm.is_dead():
-            worms.remove(worm)
-            worm = random.choice(worm_collection)
-            worms.append(worm(unicorn_leds))
+class LifeAndDeath:
+    def __init__(
+        self,
+        worm_collection,
+        unicorn_leds,
+        min_worms_count=2,
+    ):
+        self.min_worms_count = min_worms_count
+        self.worms = []
+        self.worm_collection = worm_collection
+        self.unicorn_leds = unicorn_leds
+
+    def get_random_worm(self):
+        return random.choice(self.worm_collection)(self.unicorn_leds)
+
+    def handle_life_and_death(self):
+        for worm in self.worms:
+            worm.move()
+            self.procreate(worm)
+            if worm.is_dead():
+                self.worms.remove(worm)
+        if len(self.worms) < self.min_worms_count:
+            self.worms.append(self.get_random_worm())
+
+    # Worms should have control over procreation themselves
+    def procreate(self, worm):
+        if random.randint(0, worm.MAX_AGE) == 1:
+            self.birth_worm()
+
+    def birth_worm(self):
+        self.worms.append(self.get_random_worm())
 
 
 # Unicorn leds managed a matrix of virtual leds and manages the merging
@@ -403,16 +428,15 @@ worm_collection = [
 
 # worms = [worm(unicorn_leds) for worm in worm_collection]
 
-worms = [worm(unicorn_leds) for worm in random.sample(worm_collection, 2)]
+
+life_and_death = LifeAndDeath(worm_collection, unicorn_leds)
+
+# The active worms are used everywhere, I think it justifies a global
+worms = life_and_death.worms
 buttons = ButtonPresses()
 while True:
     buttons.handle_buttons()
-
-    dead_worms = []
-    for worm in worms:
-        # This moves the worm and tells unicorn_leds what to light up
-        worm.move()
-    clean_up_dead_worms()
+    life_and_death.handle_life_and_death()
 
     # Here we darken all leds a little
     unicorn_leds.deteriorate()
