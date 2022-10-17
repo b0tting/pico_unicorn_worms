@@ -284,6 +284,8 @@ class SlowWorm(Worm):
 
 
 class RedHeadWorm(Worm):
+
+    # This worm always turns the same way and has a red head
     def __init__(self, leds):
         super().__init__(leds)
         self.worm_body_color = Led.GREY
@@ -300,6 +302,12 @@ class RedHeadWorm(Worm):
         self.led_manager.set_led_color(
             self.last_x, self.last_y, self.worm_body_color, ignore_add=True
         )
+
+    def decide_up_or_down(self):
+        return 1
+
+    def decide_left_or_right(self):
+        return 1
 
 
 class ChasingWorm(Worm):
